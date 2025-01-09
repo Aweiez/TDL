@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo & Schedule App</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .hidden {
+            display: none;
+        }
+        .todo-item, .schedule-item {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #357abd;
+        }
+        input[type="text"] {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+        }
+        .edit-btn, .delete-btn {
+            margin-left: 10px;
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+        .delete-btn {
+            background-color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Login Section -->
+        <div id="login-section">
+            <h2>Login with Google</h2>
+            <button id="google-login">Sign in with Google</button>
+        </div>
+
+        <!-- App Section (hidden until login) -->
+        <div id="app-section" class="hidden">
+            <h2>Welcome <span id="user-name"></span></h2>
+            <button id="logout">Logout</button>
+
+            <!-- Todo List Section -->
+            <div id="todo-section">
+                <h3>Todo List</h3>
+                <div>
+                    <input type="text" id="new-todo" placeholder="Add new todo">
+                    <button onclick="addTodo()">Add</button>
+                </div>
+                <div id="todo-list"></div>
+            </div>
+
+            <!-- Schedule Section -->
+            <div id="schedule-section">
+                <h3>Schedule</h3>
+                <div>
+                    <input type="text" id="new-schedule-item" placeholder="Add schedule item">
+                    <input type="time" id="schedule-time">
+                    <button onclick="addScheduleItem()">Add</button>
+                </div>
+                <div id="schedule-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Google Sign-In
+        function initGoogleSignIn() {
+            gapi.load('auth2', function() {
+                gapi.auth2.init({
+                    client_id: 'YOUR_GOOGLE_CLIENT_ID' // Replace with your Google Client ID
+                });
+            });
+        }
+
+        // Handle Google Sign-In
+        function handleSignIn(googleUser) {
+            const profile = googleUser.getBasicProfile();
+            document.getElementById('user-name').textContent = profile.getName();
+            document.getElementById('login-section').classList.add('hidden');
+            document.getElementById('app-section').classList.remove('hidden');
+            loadUserData();
+        }
+
+        // Load user data from localStorage
+        function loadUserData() {
+            const todos = JSON.parse(localStorage.getItem('todos')) || [];
+            const schedule = JSON.parse(localStorage.getItem('schedule')) || [];
+            
+            // Clear existing lists
+            document.getElementById('todo-list').innerHTML = '';
+            document.getElementById('schedule-list').innerHTML = '';
+            
+            // Render todos
+            todos.forEach(todo => {
+                addTodoToDOM(todo);
+            });
+            
+            // Render schedule items
+            schedule.forEach(item => {
+                addScheduleItemToDOM(item);
+            });
+        }
+
+        // Add new todo
+        function addTodo() {
+            const input = document.getElementById('new-todo');
+            const text = input.value.trim();
+            
+            if (text) {
+                const todo = {
+                    id: Date.now(),
+                    text: text,
+                    completed: false,
+                    lastReset: new Date().toDateString()
+                };
+                
+                addTodoToDOM(todo);
+                saveTodos();
+                input.value = '';
+            }
+        }
+
+        // Add todo to DOM
+        function addTodoToDOM(todo) {
+            const div = document.createElement('div');
+            div.className = 'todo-item';
+            div.setAttribute('data-id', todo.id);
+            
+            div.innerHTML = `
+                <input type="checkbox" ${todo.completed ? 'checked' : ''} onchange="toggleTodo(${todo.id})">
+                <span>${todo.text}</span>
+                <button class="edit-btn" onclick="editTodo(${todo.id})">Edit</button>
+                <button class="delete-btn" onclick="deleteTodo(${todo.id})">Delete</button>
+            `;
+            
+            document.getElementById('todo-list').appendChild(div);
+        }
+
+        // Add schedule item
+        function addScheduleItem() {
+            const input = document.getElementById('new-schedule-item');
+            const timeInput = document.getElementById('schedule-time');
+            const text = input.value.trim();
+            const time = timeInput.value;
+            
+            if (text && time) {
+                const item = {
+                    id: Date.now(),
+                    text: text,
+                    time: time
+                };
+                
+                addScheduleItemToDOM(item);
+                saveSchedule();
+                input.value = '';
+                timeInput.value = '';
+            }
+        }
+
+        // Add schedule item to DOM
+        function addScheduleItemToDOM(item) {
+            const div = document.createElement('div');
+            div.className = 'schedule-item';
+            div.setAttribute('data-id', item.id);
+            
+            div.innerHTML = `
+                <span>${item.time} - ${item.text}</span>
+                <button class="edit-btn" onclick="editScheduleItem(${item.id})">Edit</button>
+                <button class="delete-btn" onclick="deleteScheduleItem(${item.id})">Delete</button>
+            `;
+            
+            document.getElementById('schedule-list').appendChild(div);
+        }
+
+        // Save todos to localStorage
+        function saveTodos() {
+            const todos = Array.from(document.querySelectorAll('.todo-item')).map(item => ({
+                id: parseInt(item.getAttribute('data-id')),
+                text: item.querySelector('span').textContent,
+                completed: item.querySelector('input[type="checkbox"]').checked,
+                lastReset: new Date().toDateString()
+            }));
+            
+            localStorage.setItem('todos', JSON.stringify(todos));
+        }
+
+        // Save schedule to localStorage
+        function saveSchedule() {
+            const schedule = Array.from(document.querySelectorAll('.schedule-item')).map(item => {
+                const [time, text] = item.querySelector('span').textContent.split(' - ');
+                return {
+                    id: parseInt(item.getAttribute('data-id')),
+                    text: text,
+                    time: time
+                };
+            });
+            
+            localStorage.setItem('schedule', JSON.stringify(schedule));
+        }
+
+        // Reset todos every 24 hours
+        function resetTodos() {
+            const todos = JSON.parse(localStorage.getItem('todos')) || [];
+            const today = new Date().toDateString();
+            
+            todos.forEach(todo => {
+                if (todo.lastReset !== today) {
+                    todo.completed = false;
+                    todo.lastReset = today;
+                }
+            });
+            
+            localStorage.setItem('todos', JSON.stringify(todos));
+            loadUserData();
+        }
+
+        // Check for todos reset every minute
+        setInterval(resetTodos, 60000);
+
+        // Initial load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if user is already signed in
+            if (localStorage.getItem('isLoggedIn')) {
+                document.getElementById('login-section').classList.add('hidden');
+                document.getElementById('app-section').classList.remove('hidden');
+                loadUserData();
+            }
+        });
+    </script>
+    <script src="https://apis.google.com/js/platform.js?onload=initGoogleSignIn" async defer></script>
+</body>
+</html>
